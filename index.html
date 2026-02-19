@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Football Match Prediction</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  font-family: Arial, sans-serif;
+  background: url("https://wallpaperaccess.com/full/92287.jpg") no-repeat center center fixed;
+  background-size: cover;
+  color:white;
+}
+
+.overlay{
+  min-height:100vh;
+  background: rgba(0,0,0,0.65);
+  padding:15px;
+}
+
+.container{
+  max-width:500px;
+  margin:auto;
+}
+
+.select-box,.card{
+  background: rgba(255,255,255,0.1);
+  padding:15px;
+  border-radius:12px;
+  margin-top:20px;
+}
+
+select, button{
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  border-radius:8px;
+  border:none;
+  font-size:16px;
+}
+
+button{
+  background:#00cc88;
+  color:black;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.hidden{display:none}
+
+.match-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:20px;
+}
+
+.match-header img{
+  width:70px;
+  height:70px;
+}
+
+.vs{
+  font-size:24px;
+  color:gold;
+  animation:pulse 1.5s infinite;
+}
+
+@keyframes pulse{
+  0%{opacity:.4}
+  50%{opacity:1}
+  100%{opacity:.4}
+}
+
+.winner{
+  background: linear-gradient(135deg,#1e3c72,#2a5298);
+  text-align:center;
+  font-size:18px;
+}
+
+.bar{
+  background:#222;
+  border-radius:20px;
+  overflow:hidden;
+  margin-bottom:10px;
+}
+
+.fill{
+  height:10px;
+  width:0%;
+  background:linear-gradient(90deg,#00ff99,#00ccff);
+  transition:1s;
+}
+
+.confidence{
+  text-align:center;
+  margin-top:15px;
+}
+
+.circle{
+  width:90px;
+  height:90px;
+  border:5px solid gold;
+  border-radius:50%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  font-size:22px;
+  margin:auto;
+}
+
+.loading{
+  text-align:center;
+  font-size:22px;
+  padding:40px;
+}
+
+.history{
+  font-size:14px;
+}
+</style>
+</head>
+<body>
+
+<div class="overlay">
+<div class="container">
+
+<div id="selection" class="select-box">
+  <h2>⚽ Select Teams</h2>
+  <select id="homeTeam"></select>
+  <select id="awayTeam"></select>
+  <button onclick="startPrediction()">Predict Match</button>
+</div>
+
+<div id="loading" class="loading hidden">
+  🤖 AI is analyzing the match...
+</div>
+
+<div id="prediction" class="hidden">
+
+  <div class="match-header">
+    <img id="homeLogo">
+    <div class="vs">VS</div>
+    <img id="awayLogo">
+  </div>
+
+  <div class="card winner">
+    🏆 Predicted Winner: <b><span id="winnerName"></span></b>
+  </div>
+
+  <div class="card">
+    Home Win
+    <div class="bar"><div class="fill" id="homeBar"></div></div>
+
+    Draw
+    <div class="bar"><div class="fill" id="drawBar"></div></div>
+
+    Away Win
+    <div class="bar"><div class="fill" id="awayBar"></div></div>
+  </div>
+
+  <div class="card">
+    🤖 <b>AI Prediction:</b>
+    <span id="aiText"></span>
+  </div>
+
+  <div class="confidence">
+    <div class="circle" id="confidenceCircle">0%</div>
+    Prediction Confidence
+  </div>
+
+  <div class="card history">
+    <b>📜 Match History</b>
+    <div id="historyList"></div>
+  </div>
+
+  <button onclick="location.reload()">🔁 New Prediction</button>
+
+</div>
+
+</div>
+</div>
+
+<script>
+const teams = [
+  {name:"Manchester United", logo:"https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg", strength:85},
+  {name:"Arsenal", logo:"https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg", strength:88},
+  {name:"Chelsea", logo:"https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg", strength:83},
+  {name:"Liverpool", logo:"https://upload.wikimedia.org/wikipedia/en/0/0c/Liverpool_FC.svg", strength:90},
+  {name:"Barcelona", logo:"https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg", strength:89},
+  {name:"Real Madrid", logo:"https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg", strength:92},
+  {name:"PSG", logo:"https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg", strength:87},
+  {name:"Bayern Munich", logo:"https://upload.wikimedia.org/wikipedia/en/1/1f/FC_Bayern_München_logo_%282017%29.svg", strength:91}
+];
+
+const homeSelect = document.getElementById("homeTeam");
+const awaySelect = document.getElementById("awayTeam");
+
+let history = [];
+
+teams.forEach((t,i)=>{
+  homeSelect.innerHTML += `<option value="${i}">${t.name}</option>`;
+  awaySelect.innerHTML += `<option value="${i}">${t.name}</option>`;
+});
+
+homeSelect.onchange = ()=>{
+  [...awaySelect.options].forEach(o=>o.disabled=false);
+  awaySelect.options[homeSelect.value].disabled=true;
+};
+
+awaySelect.onchange = ()=>{
+  [...homeSelect.options].forEach(o=>o.disabled=false);
+  homeSelect.options[awaySelect.value].disabled=true;
+};
+
+function startPrediction(){
+
+  document.getElementById("selection").classList.add("hidden");
+  document.getElementById("loading").classList.remove("hidden");
+
+  setTimeout(runPrediction,1500);
+}
+
+function runPrediction(){
+
+  document.getElementById("loading").classList.add("hidden");
+  document.getElementById("prediction").classList.remove("hidden");
+
+  const home = teams[homeSelect.value];
+  const away = teams[awaySelect.value];
+
+  document.getElementById("homeLogo").src = home.logo;
+  document.getElementById("awayLogo").src = away.logo;
+
+  let homeChance = home.strength + Math.floor(Math.random()*10);
+  let awayChance = away.strength + Math.floor(Math.random()*10);
+  let drawChance = Math.floor(Math.random()*15)+10;
+
+  let total = homeChance + awayChance + drawChance;
+
+  homeChance = Math.round(homeChance/total*100);
+  awayChance = Math.round(awayChance/total*100);
+  drawChance = 100 - homeChance - awayChance;
+
+  document.getElementById("homeBar").style.width = homeChance+"%";
+  document.getElementById("drawBar").style.width = drawChance+"%";
+  document.getElementById("awayBar").style.width = awayChance+"%";
+
+  const winner = homeChance > awayChance ? home.name : away.name;
+
+  document.getElementById("winnerName").innerText = winner;
+
+  document.getElementById("aiText").innerText =
+    `${winner} is predicted to win due to higher team strength and recent performance.`;
+
+  document.getElementById("confidenceCircle").innerText =
+    Math.max(homeChance,awayChance)+"%";
+
+  history.push(`${home.name} vs ${away.name} → Winner: ${winner}`);
+
+  document.getElementById("historyList").innerHTML =
+    history.map(h=>"• "+h).join("<br>");
+}
+</script>
+
+</body>
+</html>
+
